@@ -64,6 +64,8 @@ type File struct {
 	PackagePrefix string
 	// CanonicalPath adds a canonical import path annotation to the package clause.
 	CanonicalPath string
+	// ImportGroupingPolicy dictates how the imports are grouped
+	ImportGroupingPolicy ImportGroupingPolicy
 }
 
 // importdef is used to differentiate packages where we know the package name from packages where the

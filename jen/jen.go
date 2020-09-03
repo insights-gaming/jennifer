@@ -99,6 +99,33 @@ func (f *File) Render(w io.Writer) error {
 	return nil
 }
 
+func renderImportGroup(source io.Writer, imports map[string]importdef) error {
+	// We must sort the imports to ensure repeatable
+	// source.
+	paths := []string{}
+	for path := range imports {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		def := imports[path]
+		if def.alias && path != "C" {
+			// "C" package should be rendered without alias even when used as an anonymous import
+			// (e.g. should never have an underscore).
+			if _, err := fmt.Fprintf(source, "%s %s\n", def.name, strconv.Quote(path)); err != nil {
+				return err
+			}
+
+		} else {
+			if _, err := fmt.Fprintf(source, "%s\n", strconv.Quote(path)); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (f *File) renderImports(source io.Writer) error {
 
 	// Render the "C" import if it's been used in a `Qual`, `Anon` or if there's a preamble comment
@@ -135,26 +162,21 @@ func (f *File) renderImports(source io.Writer) error {
 		if _, err := fmt.Fprint(source, "import (\n"); err != nil {
 			return err
 		}
-		// We must sort the imports to ensure repeatable
-		// source.
-		paths := []string{}
-		for path := range filtered {
-			paths = append(paths, path)
+		var groups []map[string]importdef
+		if f.ImportGroupingPolicy != nil {
+			groups = f.ImportGroupingPolicy(filtered)
+		} else {
+			groups = []map[string]importdef{filtered}
 		}
-		sort.Strings(paths)
-		for _, path := range paths {
-			def := filtered[path]
-			if def.alias && path != "C" {
-				// "C" package should be rendered without alias even when used as an anonymous import
-				// (e.g. should never have an underscore).
-				if _, err := fmt.Fprintf(source, "%s %s\n", def.name, strconv.Quote(path)); err != nil {
-					return err
-				}
-
-			} else {
-				if _, err := fmt.Fprintf(source, "%s\n", strconv.Quote(path)); err != nil {
-					return err
-				}
+		if err := renderImportGroup(source, groups[0]); err != nil {
+			return err
+		}
+		for _, group := range groups[1:] {
+			if _, err := fmt.Fprint(source, "\n"); err != nil {
+				return err
+			}
+			if err := renderImportGroup(source, group); err != nil {
+				return err
 			}
 		}
 		if _, err := fmt.Fprint(source, ")\n\n"); err != nil {
