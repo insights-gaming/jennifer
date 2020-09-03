@@ -11,6 +11,15 @@ import (
 	"strconv"
 )
 
+type FormatError struct {
+	Source *bytes.Buffer
+	Err    error
+}
+
+func (err *FormatError) Error() string {
+	return fmt.Sprintf("Error %s while formatting source:\n%s", err.Err, err.Source.String())
+}
+
 // Code represents an item of code that can be rendered.
 type Code interface {
 	render(f *File, w io.Writer, s *Statement) error
@@ -79,7 +88,10 @@ func (f *File) Render(w io.Writer) error {
 	}
 	formatted, err := format.Source(source.Bytes())
 	if err != nil {
-		return fmt.Errorf("Error %s while formatting source:\n%s", err, source.String())
+		return &FormatError{
+			Err:    err,
+			Source: source,
+		}
 	}
 	if _, err := w.Write(formatted); err != nil {
 		return err
